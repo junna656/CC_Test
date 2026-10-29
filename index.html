@@ -1,0 +1,338 @@
+<title>Pixel-Schlange</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Schlange">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: ein Handheld auf einem Bildschirm – LCD-Display oben, Steuerkreuz unten */
+:root {
+  --case: #1d272b;
+  --case-hi: #2b393e;
+  --lcd: #b4c597;
+  --lcd-edge: #9fb280;
+  --pixel: #22301a;
+  --ghost: rgba(34, 48, 26, 0.07);
+  --key: #36464c;
+  --key-press: #4a5d64;
+  --key-fg: #dbe5cf;
+  --muted: #8fa0a3;
+  --display: "Silkscreen", ui-monospace, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--case);
+  color: var(--key-fg);
+  font-family: var(--mono);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+.app {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.lcd {
+  width: min(100%, 440px, calc(100% - 0px));
+  box-sizing: border-box;
+  background: var(--lcd);
+  color: var(--pixel);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: inset 0 0 0 3px var(--lcd-edge), 0 0 0 6px var(--case-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--display);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.board {
+  position: relative;
+  width: min(100%, calc(100svh - 360px));
+  min-width: 200px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  align-self: center;
+}
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  background: rgba(180, 197, 151, 0.88);
+}
+.overlay[hidden] { display: none; }
+.overlay h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(22px, 7vw, 32px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-wrap: balance;
+}
+.overlay p { margin: 0; font-size: 13px; line-height: 1.45; max-width: 28ch; }
+.start {
+  font-family: var(--display);
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  background: var(--pixel);
+  color: var(--lcd);
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.start:focus-visible, .key:focus-visible { outline: 3px solid var(--key-fg); outline-offset: 2px; }
+.hint { margin: 0; font-size: 11px; color: var(--muted); text-align: center; }
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 6px;
+  flex: none;
+}
+.key {
+  border: 0;
+  border-radius: 14px;
+  background: var(--key);
+  color: var(--key-fg);
+  font-family: var(--display);
+  font-size: 20px;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+.key:active, .key.on { background: var(--key-press); transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.key.mid { font-size: 11px; letter-spacing: 0.05em; border-radius: 50%; }
+.up { grid-area: 1 / 2; } .left { grid-area: 2 / 1; } .mid { grid-area: 2 / 2; }
+.right { grid-area: 2 / 3; } .down { grid-area: 3 / 2; }
+@media (prefers-reduced-motion: reduce) { .key:active, .key.on { transform: none; } }
+</style>
+
+<div class="app">
+  <div class="lcd">
+    <div class="hud">
+      <span>Punkte <b id="score">0</b></span>
+      <span>Rekord <b id="best">0</b></span>
+    </div>
+    <div class="board">
+      <canvas id="cv" aria-label="Spielfeld"></canvas>
+      <div class="overlay" id="overlay">
+        <h1 id="ov-title">Schlange</h1>
+        <p id="ov-text">Wische über das Feld oder nutze das Steuerkreuz. Friss die Punkte und beiß dich nicht selbst.</p>
+        <button class="start" id="start" type="button">Start</button>
+      </div>
+    </div>
+  </div>
+  <div class="pad" aria-label="Steuerung">
+    <button class="key up" id="k-up" type="button" aria-label="Hoch">▲</button>
+    <button class="key left" id="k-left" type="button" aria-label="Links">◀</button>
+    <button class="key mid" id="k-mid" type="button" aria-label="Pause">Pause</button>
+    <button class="key right" id="k-right" type="button" aria-label="Rechts">▶</button>
+    <button class="key down" id="k-down" type="button" aria-label="Runter">▼</button>
+  </div>
+  <p class="hint">Tipp: In Safari „Teilen“ → „Zum Home-Bildschirm“</p>
+</div>
+
+<script>
+(() => {
+  const N = 16;
+  const START_SPEED = 170, MIN_SPEED = 70, BEST_KEY = "pixel-schlange-best";
+  const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+  const $ = id => document.getElementById(id);
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  let snake, dir, queue, food, score, speed, state = "ready", acc = 0, last = 0, best = 0;
+
+  try { best = Number(localStorage.getItem(BEST_KEY)) || 0; } catch (e) {}
+  $("best").textContent = best;
+
+  function reset() {
+    snake = [{ x: 6, y: 8 }, { x: 5, y: 8 }, { x: 4, y: 8 }];
+    dir = { x: 1, y: 0 };
+    queue = [];
+    score = 0;
+    speed = START_SPEED;
+    $("score").textContent = 0;
+    placeFood();
+  }
+
+  function placeFood() {
+    const free = [];
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++)
+        if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
+    food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
+  }
+
+  function turn(x, y) {
+    if (state !== "running") return;
+    const ref = queue.length ? queue[queue.length - 1] : dir;
+    if ((ref.x === -x && ref.y === -y) || (ref.x === x && ref.y === y)) return;
+    if (queue.length < 3) queue.push({ x, y });
+  }
+
+  function step() {
+    if (queue.length) dir = queue.shift();
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    const eats = food && head.x === food.x && head.y === food.y;
+    const body = eats ? snake : snake.slice(0, -1);
+    if (head.x < 0 || head.y < 0 || head.x >= N || head.y >= N || body.some(s => s.x === head.x && s.y === head.y)) {
+      return gameOver();
+    }
+    snake.unshift(head);
+    if (!eats) { snake.pop(); return; }
+    score++;
+    $("score").textContent = score;
+    speed = Math.max(MIN_SPEED, speed - 5);
+    placeFood();
+    if (!food) gameOver(true);
+  }
+
+  function gameOver(won) {
+    state = "over";
+    const record = score > best;
+    if (record) {
+      best = score;
+      $("best").textContent = best;
+      try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+    }
+    showOverlay(
+      won ? "Gewonnen!" : "Game Over",
+      `${score} ${score === 1 ? "Punkt" : "Punkte"}${record && score > 0 ? " – neuer Rekord!" : ""}`,
+      "Nochmal"
+    );
+  }
+
+  function showOverlay(title, text, btn) {
+    $("ov-title").textContent = title;
+    $("ov-text").textContent = text;
+    $("start").textContent = btn;
+    $("overlay").hidden = false;
+    $("k-mid").textContent = state === "paused" ? "Weiter" : "Start";
+  }
+
+  function start() {
+    if (state !== "paused") reset();
+    state = "running";
+    $("overlay").hidden = true;
+    $("k-mid").textContent = "Pause";
+    last = performance.now();
+    acc = 0;
+  }
+
+  function pause() {
+    if (state !== "running") return;
+    state = "paused";
+    showOverlay("Pause", `${score} ${score === 1 ? "Punkt" : "Punkte"} bisher`, "Weiter");
+  }
+
+  function toggle() { state === "running" ? pause() : start(); }
+
+  // Zeichnen
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    draw();
+  }
+
+  function cell(x, y, c, inset) {
+    const s = cv.width / N, g = Math.max(1, s * inset);
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(x * s + g), Math.round(y * s + g), Math.ceil(s - 2 * g), Math.ceil(s - 2 * g));
+  }
+
+  function draw() {
+    const pixel = css("--pixel"), ghost = css("--ghost"), s = cv.width / N;
+    ctx.fillStyle = css("--lcd");
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) cell(x, y, ghost, 0.08);
+    ctx.strokeStyle = pixel;
+    ctx.lineWidth = Math.max(1, s * 0.08);
+    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, cv.width - ctx.lineWidth, cv.height - ctx.lineWidth);
+    if (!snake) return;
+    if (food) {
+      // Futter als kleines Pixel-Kreuz
+      const fx = food.x * s, fy = food.y * s, q = s / 3;
+      ctx.fillStyle = pixel;
+      ctx.fillRect(fx + q, fy + q * 0.3, q, q * 2.4);
+      ctx.fillRect(fx + q * 0.3, fy + q, q * 2.4, q);
+    }
+    snake.forEach((p, i) => cell(p.x, p.y, pixel, i === 0 ? 0.04 : 0.1));
+    // Auge am Kopf
+    const h = snake[0], e = s * 0.18;
+    ctx.fillStyle = css("--lcd");
+    ctx.fillRect(h.x * s + s / 2 - e / 2 + dir.x * s * 0.18 - dir.y * s * 0.15,
+                 h.y * s + s / 2 - e / 2 + dir.y * s * 0.18 + dir.x * s * 0.15 * -1, e, e);
+  }
+
+  function loop(t) {
+    if (state === "running") {
+      acc += t - last;
+      while (acc >= speed && state === "running") { acc -= speed; step(); }
+    }
+    last = t;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // Steuerung: Wischen
+  let sx = null, sy = null;
+  cv.addEventListener("pointerdown", e => { sx = e.clientX; sy = e.clientY; });
+  cv.addEventListener("pointermove", e => {
+    if (sx === null) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 22) return;
+    Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
+    sx = e.clientX; sy = e.clientY;
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(ev => cv.addEventListener(ev, () => { sx = sy = null; }));
+
+  // Steuerung: Tasten am Bildschirm (pointerdown reagiert schneller als click)
+  const keys = { "k-up": [0, -1], "k-down": [0, 1], "k-left": [-1, 0], "k-right": [1, 0] };
+  Object.entries(keys).forEach(([id, [x, y]]) => {
+    $(id).addEventListener("pointerdown", e => { e.preventDefault(); turn(x, y); });
+    $(id).addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); turn(x, y); } });
+  });
+  $("k-mid").addEventListener("click", toggle);
+  $("start").addEventListener("click", start);
+
+  // Steuerung: Tastatur
+  document.addEventListener("keydown", e => {
+    const map = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
+    if (map[e.key]) { e.preventDefault(); turn(...map[e.key]); }
+    else if (e.key === " " || e.key === "p") { if (e.target.tagName !== "BUTTON") { e.preventDefault(); toggle(); } }
+  });
+
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+  window.addEventListener("resize", resize);
+
+  reset();
+  resize();
+  requestAnimationFrame(t => { last = t; loop(t); });
+})();
+</script>
