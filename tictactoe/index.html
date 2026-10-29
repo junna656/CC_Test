@@ -166,6 +166,7 @@ body {
 }
 .seg button[aria-pressed="true"] { background: var(--lcd); color: var(--pixel); }
 .seg button:focus-visible, .next:focus-visible, .reset:focus-visible, .back:focus-visible { outline: 3px solid var(--key-fg); outline-offset: 2px; }
+.foot span { display: flex; gap: 16px; }
 .foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .reset, .back {
   font-family: var(--mono);
@@ -209,7 +210,10 @@ body {
       <button type="button" data-level="profi" aria-pressed="false">Profi</button>
     </fieldset>
     <div class="foot">
-      <a class="back" href="../">← Zur Schlange</a>
+      <span>
+        <a class="back" href="../">Schlange</a>
+        <a class="back" href="../labyrinth/">Labyrinth</a>
+      </span>
       <button class="reset" id="reset" type="button">Punkte zurücksetzen</button>
     </div>
   </div>
