@@ -1,7 +1,17 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pixel-Schlange</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Schlange">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1d272b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
 /* Layout: ein Handheld auf einem Bildschirm – LCD-Display oben, Steuerkreuz unten */
@@ -20,17 +30,19 @@
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
-html, body { height: 100%; }
+html, body { height: 100%; margin: 0; }
 body {
   background: var(--case);
   color: var(--key-fg);
   font-family: var(--mono);
   overflow: hidden;
+  overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
 }
+[hidden] { display: none !important; }
 .app {
   height: 100%;
   box-sizing: border-box;
@@ -39,12 +51,13 @@ body {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  padding-block: 12px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 .lcd {
-  width: min(100%, 440px, calc(100% - 0px));
+  width: min(100%, 440px);
   box-sizing: border-box;
   background: var(--lcd);
   color: var(--pixel);
@@ -66,7 +79,7 @@ body {
 }
 .board {
   position: relative;
-  width: min(100%, calc(100svh - 360px));
+  width: min(100%, calc(100svh - 380px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   min-width: 200px;
   max-width: 100%;
   aspect-ratio: 1;
@@ -81,10 +94,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   align-items: center;
   justify-content: center;
   gap: 12px;
+  padding: 12px;
   text-align: center;
   background: rgba(180, 197, 151, 0.88);
 }
-.overlay[hidden] { display: none; }
 .overlay h1 {
   margin: 0;
   font-family: var(--display);
@@ -105,8 +118,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   padding: 10px 20px;
   cursor: pointer;
 }
-.start:focus-visible, .key:focus-visible { outline: 3px solid var(--key-fg); outline-offset: 2px; }
-.hint { margin: 0; font-size: 11px; color: var(--muted); text-align: center; }
+.start:focus-visible, .key:focus-visible, .tilt:focus-visible { outline: 3px solid var(--key-fg); outline-offset: 2px; }
 .pad {
   display: grid;
   grid-template-columns: repeat(3, 64px);
@@ -129,9 +141,25 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .key.mid { font-size: 11px; letter-spacing: 0.05em; border-radius: 50%; }
 .up { grid-area: 1 / 2; } .left { grid-area: 2 / 1; } .mid { grid-area: 2 / 2; }
 .right { grid-area: 2 / 3; } .down { grid-area: 3 / 2; }
+.tilt-row { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+.tilt {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--key-fg);
+  background: transparent;
+  border: 2px solid var(--key);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tilt[aria-pressed="true"] { background: var(--lcd); color: var(--pixel); border-color: var(--lcd); }
+.hint { margin: 0; font-size: 11px; color: var(--muted); text-align: center; min-height: 1.4em; }
 @media (prefers-reduced-motion: reduce) { .key:active, .key.on { transform: none; } }
 </style>
-
+</head>
+<body>
 <div class="app">
   <div class="lcd">
     <div class="hud">
@@ -142,7 +170,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       <canvas id="cv" aria-label="Spielfeld"></canvas>
       <div class="overlay" id="overlay">
         <h1 id="ov-title">Schlange</h1>
-        <p id="ov-text">Wische über das Feld oder nutze das Steuerkreuz. Friss die Punkte und beiß dich nicht selbst.</p>
+        <p id="ov-text">Wische, nutze das Steuerkreuz oder schalte „Neigen“ ein. Friss die Punkte und beiß dich nicht selbst.</p>
         <button class="start" id="start" type="button">Start</button>
       </div>
     </div>
@@ -150,17 +178,22 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   <div class="pad" aria-label="Steuerung">
     <button class="key up" id="k-up" type="button" aria-label="Hoch">▲</button>
     <button class="key left" id="k-left" type="button" aria-label="Links">◀</button>
-    <button class="key mid" id="k-mid" type="button" aria-label="Pause">Pause</button>
+    <button class="key mid" id="k-mid" type="button" aria-label="Start oder Pause">Start</button>
     <button class="key right" id="k-right" type="button" aria-label="Rechts">▶</button>
     <button class="key down" id="k-down" type="button" aria-label="Runter">▼</button>
   </div>
-  <p class="hint">Tipp: In Safari „Teilen“ → „Zum Home-Bildschirm“</p>
+  <div class="tilt-row">
+    <button class="tilt" id="tilt" type="button" aria-pressed="false">Neigen: aus</button>
+    <p class="hint" id="hint">Tipp: In Safari „Teilen“ → „Zum Home-Bildschirm“</p>
+  </div>
 </div>
 
 <script>
 (() => {
   const N = 16;
-  const START_SPEED = 170, MIN_SPEED = 70, BEST_KEY = "pixel-schlange-best";
+  const START_SPEED = 170, MIN_SPEED = 70, BEST_KEY = "pixel-schlange-best", TILT_KEY = "pixel-schlange-tilt";
+  // Neigung in Grad, ab der gelenkt wird
+  const TILT_THRESHOLD = 12;
   const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
   const $ = id => document.getElementById(id);
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -214,6 +247,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
   function gameOver(won) {
     state = "over";
+    releaseWakeLock();
     const record = score > best;
     if (record) {
       best = score;
@@ -242,15 +276,95 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     $("k-mid").textContent = "Pause";
     last = performance.now();
     acc = 0;
+    calibrate();
+    requestWakeLock();
   }
 
   function pause() {
     if (state !== "running") return;
     state = "paused";
+    releaseWakeLock();
     showOverlay("Pause", `${score} ${score === 1 ? "Punkt" : "Punkte"} bisher`, "Weiter");
   }
 
   function toggle() { state === "running" ? pause() : start(); }
+
+  // Bildschirm beim Spielen nicht abdunkeln (wichtig bei Neige-Steuerung)
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch (e) { wakeLock = null; }
+  }
+  function releaseWakeLock() {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
+  }
+
+  // Neige-Steuerung über das Gyroskop
+  let tiltOn = false, tiltRaw = null, tiltZero = null, tiltDir = null;
+
+  function setHint(text) { $("hint").textContent = text; }
+
+  function setTilt(on) {
+    tiltOn = on;
+    $("tilt").setAttribute("aria-pressed", String(on));
+    $("tilt").textContent = on ? "Neigen: an" : "Neigen: aus";
+    setHint(on ? "Halte das Handy beim Start so, wie du spielen willst." : "");
+    try { localStorage.setItem(TILT_KEY, on ? "1" : "0"); } catch (e) {}
+    if (on) calibrate();
+  }
+
+  // Die aktuelle Haltung beim Start gilt als „gerade“
+  function calibrate() {
+    tiltZero = tiltRaw ? { ...tiltRaw } : null;
+    tiltDir = null;
+  }
+
+  function onOrientation(e) {
+    if (e.beta === null || e.gamma === null) return;
+    tiltRaw = { beta: e.beta, gamma: e.gamma };
+    if (!tiltZero) tiltZero = { ...tiltRaw };
+    if (!tiltOn || state !== "running") return;
+    const dx = e.gamma - tiltZero.gamma;   // rechts runter kippen → rechts
+    const dy = e.beta - tiltZero.beta;     // Oberkante weg von dir → hoch
+    let next = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= TILT_THRESHOLD) {
+      next = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+    }
+    // Nur lenken, wenn sich die Kipprichtung ändert
+    const key = next ? next.join() : null;
+    if (key === tiltDir) return;
+    tiltDir = key;
+    if (next) turn(...next);
+  }
+
+  async function enableTilt() {
+    if (!("DeviceOrientationEvent" in window)) {
+      setHint("Dieses Gerät hat keinen Bewegungssensor.");
+      return;
+    }
+    // iOS fragt einmal nach Erlaubnis, und nur nach einem Tippen
+    if (typeof DeviceOrientationEvent.requestPermission === "function") {
+      try {
+        const answer = await DeviceOrientationEvent.requestPermission();
+        if (answer !== "granted") {
+          setHint("Bewegung nicht erlaubt. Schließe die App und öffne sie neu, um erneut gefragt zu werden.");
+          return;
+        }
+      } catch (e) {
+        setHint("Bewegungssensor nicht verfügbar. Die Seite muss über https geöffnet sein.");
+        return;
+      }
+    }
+    window.addEventListener("deviceorientation", onOrientation);
+    setTilt(true);
+  }
+
+  $("tilt").addEventListener("click", () => tiltOn ? setTilt(false) : enableTilt());
+
+  // Auf Android braucht es keine Erlaubnis, dort merken wir uns die Wahl
+  try {
+    if (localStorage.getItem(TILT_KEY) === "1" && typeof DeviceOrientationEvent?.requestPermission !== "function") enableTilt();
+  } catch (e) {}
 
   // Zeichnen
   function resize() {
@@ -331,8 +445,14 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
   window.addEventListener("resize", resize);
 
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
   reset();
   resize();
   requestAnimationFrame(t => { last = t; loop(t); });
 })();
 </script>
+</body>
+</html>
