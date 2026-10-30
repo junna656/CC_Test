@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Doppel-Bit</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Doppel-Bit">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#172326">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: Handheld mit türkisem Sci-Fi-LCD – Raum oben, Figuren und Aktionen darunter */
+:root {
+  --case: #172326;
+  --case-hi: #263639;
+  --lcd: #a7c4b5;
+  --lcd-edge: #8dad9d;
+  --pixel: #12302a;
+  --ghost: rgba(18, 48, 42, 0.08);
+  --soft: rgba(18, 48, 42, 0.38);
+  --hl: rgba(18, 48, 42, 0.16);
+  --key: #33464a;
+  --key-press: #465d62;
+  --key-fg: #d6e6de;
+  --muted: #8b9fa1;
+  --display: "Silkscreen", ui-monospace, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--case);
+  color: var(--key-fg);
+  font-family: var(--mono);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+[hidden] { display: none !important; }
+.app {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.lcd {
+  width: min(100%, 440px);
+  box-sizing: border-box;
+  background: var(--lcd);
+  color: var(--pixel);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: inset 0 0 0 3px var(--lcd-edge), 0 0 0 6px var(--case-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--display);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.board {
+  width: min(100%, calc(100svh - 330px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  min-width: 240px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  align-self: center;
+}
+#cv { display: block; width: 100%; height: 100%; touch-action: manipulation; cursor: pointer; }
+.log { min-height: 3em; font-size: 12px; line-height: 1.5; text-align: center; text-wrap: balance; }
+.panel { width: min(100%, 440px); display: flex; flex-direction: column; gap: 8px; flex: none; }
+.units, .actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.chip, .act, .end {
+  border: 0;
+  border-radius: 10px;
+  font-family: var(--display);
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.chip {
+  background: var(--case-hi);
+  color: var(--key-fg);
+  font-size: 12px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.chip small { font-family: var(--mono); font-size: 11px; letter-spacing: 0; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--lcd); color: var(--pixel); }
+.chip[aria-pressed="true"] small { color: var(--pixel); }
+.chip:disabled { opacity: 0.45; cursor: default; }
+.act {
+  background: var(--key);
+  color: var(--key-fg);
+  font-size: 11px;
+  padding: 12px 4px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+.act[aria-pressed="true"] { background: var(--lcd); color: var(--pixel); }
+.act:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+.act:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.end {
+  background: var(--lcd);
+  color: var(--pixel);
+  font-size: 14px;
+  padding: 13px;
+}
+.end:disabled { opacity: 0.4; cursor: default; }
+.foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; flex: none; }
+.foot a, .foot button {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chip:focus-visible, .act:focus-visible, .end:focus-visible, .start:focus-visible,
+.foot a:focus-visible, .foot button:focus-visible { outline: 3px solid var(--key-fg); outline-offset: 2px; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 14px;
+  overflow-y: auto;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  text-align: center;
+  color: var(--pixel);
+  background: var(--lcd);
+}
+.overlay h1 { margin: 0; font-family: var(--display); font-size: clamp(22px, 7vw, 32px); letter-spacing: 0.06em; text-wrap: balance; }
+.overlay p { margin: 0; font-size: 13px; line-height: 1.45; max-width: 34ch; }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; text-align: left; font-size: 12px; line-height: 1.4; max-width: 36ch; }
+.legend canvas { width: 30px; height: 30px; }
+.start {
+  font-family: var(--display);
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  background: var(--pixel);
+  color: var(--lcd);
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="lcd">
+    <div class="hud">
+      <span>Runde <b id="round">1</b></span>
+      <span>Gegner <b id="left">0</b></span>
+    </div>
+    <div class="board"><canvas id="cv" aria-label="Raum"></canvas></div>
+    <div class="log" id="log" aria-live="polite"></div>
+  </div>
+
+  <div class="panel">
+    <div class="units">
+      <button class="chip" id="chip-funke" type="button" aria-pressed="false"></button>
+      <button class="chip" id="chip-bolzen" type="button" aria-pressed="false"></button>
+    </div>
+    <div class="actions">
+      <button class="act" id="a-main" type="button" aria-pressed="false">Schießen</button>
+      <button class="act" id="a-jump" type="button" aria-pressed="false">Sprung</button>
+      <button class="act" id="a-turn" type="button">Schild ↻</button>
+      <button class="act" id="a-undo" type="button">Zurück</button>
+    </div>
+    <button class="end" id="end" type="button">Zug beenden</button>
+  </div>
+
+  <div class="foot">
+    <a href="../verlies/">Verlies</a>
+    <button id="restart" type="button">Neuer Raum</button>
+    <button id="help" type="button">Hilfe</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <h1 id="ov-title"></h1>
+  <p id="ov-text"></p>
+  <div class="legend" id="legend" hidden></div>
+  <button class="start" id="ov-btn" type="button"></button>
+</div>
+
+<script>
+(() => {
+  const N = 8, SAVE_KEY = "doppelbit-p1", HELP_KEY = "doppelbit-help-seen";
+  const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const JUMP_COOLDOWN = 3, MOVE = 3, BULLET_SPEED = 2;
+  const $ = id => document.getElementById(id);
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const rand = n => Math.floor(Math.random() * n);
+  const pick = list => list[rand(list.length)];
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const key = (x, y) => `${x},${y}`;
+  const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+  const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const TYPES = {
+    drohne:   { name: "Drohne",   hp: 1, move: 3, fly: true, info: "Fliegt, richtet sich auf eine Figur aus und schießt. Die Kugel fliegt 2 Felder pro Runde." },
+    krabbler: { name: "Krabbler", hp: 2, move: 3, info: "Läuft zur nächsten Figur und schlägt aufs markierte Nachbarfeld. Geschoben schlägt er dort zu, wohin er zeigt." },
+    moerser:  { name: "Mörser",   hp: 2, move: 2, info: "Beschießt ein Kreuz aus 5 Feldern. Das Ziel bleibt fest, auch wenn du ihn schiebst, und trifft auch Gegner." },
+  };
+
+  // ---------- Pixelbilder, 9 × 9 ----------
+  const SPRITES = {
+    funke:    ["....#....", "...###...", "..#####..", "..#.#.#..", "..#####..", ".########", "#..###...", "...#.#...", "..##.##.."],
+    bolzen:   [".#######.", ".#.###.#.", ".#######.", "#########", "#.#####.#", "#.#####.#", "..#...#..", ".##...##.", "........."],
+    drohne:   ["#########", "....#....", "..#####..", ".##.#.##.", "#########", ".##...##.", "..#...#..", ".........", "........."],
+    krabbler: [".........", "#.......#", ".#.###.#.", "..#####..", "###.#.###", "..#####..", ".#.#.#.#.", "#.......#", "........."],
+    moerser:  ["......##.", ".....##..", "....##...", "..#####..", ".#######.", "##.###.##", "#########", ".#.#.#.#.", "........."],
+    pillar:   ["#########", ".#######.", ".#.#.#.#.", ".#.#.#.#.", ".#.#.#.#.", ".#.#.#.#.", ".#######.", "#########", "........."],
+    crate:    ["#########", "##.....##", "#.#...#.#", "#..#.#..#", "#...#...#", "#..#.#..#", "#.#...#.#", "##.....##", "#########"],
+    hazard:   ["....##...", "...##....", "..##.....", ".#######.", ".....##..", "....##...", "...##....", "..##.....", "........."],
+  };
+
+  function sprite(c, name, x, y, s, color) {
+    const u = s / 11;
+    c.fillStyle = color;
+    SPRITES[name].forEach((row, j) => [...row].forEach((ch, i) => {
+      if (ch === "#") c.fillRect(Math.round(x + (i + 1) * u), Math.round(y + (j + 1) * u), Math.ceil(u), Math.ceil(u));
+    }));
+  }
+
+  // ---------- Zustand ----------
+  // S ist reines JSON, damit Vorschau (auf einer Kopie) und Speichern einfach sind.
+  let S = null;
+  const tile = (S, x, y) => (inb(x, y) ? S.tiles[y][x] : "wall");
+  const unit = (S, id) => S.units.find(u => u.id === id);
+  const actorAt = (S, x, y) => S.units.find(u => !u.down && u.x === x && u.y === y) || S.enemies.find(e => e.x === x && e.y === y);
+  const bulletAt = (S, x, y) => S.bullets.find(b => b.x === x && b.y === y);
+  const alive = (S, a) => (a.kind === "enemy" ? S.enemies.includes(a) : !a.down);
+  const label = a => (a.kind === "unit" ? a.name : TYPES[a.type].name);
+  const flies = a => a.kind === "enemy" && TYPES[a.type].fly;
+  const plus = (x, y) => [[x, y], [x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].filter(([a, b]) => inb(a, b));
+
+  function newRoom() {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const tiles = Array.from({ length: N }, () => Array(N).fill("floor"));
+      const taken = new Set();
+      const free = (rows) => {
+        for (let t = 0; t < 80; t++) {
+          const x = rand(N), y = rows[0] + rand(rows[1] - rows[0] + 1);
+          if (!taken.has(key(x, y))) { taken.add(key(x, y)); return [x, y]; }
+        }
+        return null;
+      };
+      const fx = 2 + rand(4);
+      const units = [
+        { kind: "unit", id: "funke", name: "Funke", x: fx, y: 7, hp: 3, max: 3, cd: 0, moved: false, acted: false, facing: [0, -1], down: false },
+        { kind: "unit", id: "bolzen", name: "Bolzen", x: fx + (Math.random() < 0.5 ? -1 : 1), y: 6, hp: 4, max: 4, cd: 0, moved: false, acted: false, facing: [0, -1], down: false },
+      ];
+      units.forEach(u => taken.add(key(u.x, u.y)));
+      // Platz um die Figuren freihalten
+      units.forEach(u => DIRS.forEach(([dx, dy]) => taken.add(key(u.x + dx, u.y + dy))));
+      for (let i = 0; i < 3 + rand(2); i++) { const p = free([1, 6]); if (p) tiles[p[1]][p[0]] = "pillar"; }
+      for (let i = 0; i < 3; i++) { const p = free([1, 6]); if (p) tiles[p[1]][p[0]] = "crate"; }
+      for (let i = 0; i < 2 + rand(2); i++) { const p = free([2, 5]); if (p) tiles[p[1]][p[0]] = "hazard"; }
+      const enemies = [];
+      let id = 1;
+      for (const type of ["drohne", "drohne", "krabbler", "krabbler", "moerser"]) {
+        const p = free([0, 2]);
+        if (!p) continue;
+        enemies.push({ kind: "enemy", id: id++, type, x: p[0], y: p[1], hp: TYPES[type].hp, max: TYPES[type].hp, intent: null });
+      }
+      if (enemies.length < 5) continue;
+      // Alles ohne Säulen und Kisten verbunden?
+      const seen = new Set([key(units[0].x, units[0].y)]), q = [[units[0].x, units[0].y]];
+      while (q.length) {
+        const [x, y] = q.shift();
+        for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy;
+          if (!inb(nx, ny) || tiles[ny][nx] === "pillar" || tiles[ny][nx] === "crate" || seen.has(key(nx, ny))) continue;
+          seen.add(key(nx, ny));
+          q.push([nx, ny]);
+        }
+      }
+      const open = tiles.flat().filter(t => t !== "pillar" && t !== "crate").length;
+      if (seen.size !== open) continue;
+      const room = { round: 1, tiles, units, enemies, bullets: [], over: null };
+      for (const e of room.enemies) plan(room, e);
+      return room;
+    }
+    return newRoom();
+  }
+
+  // ---------- Regeln: Schaden und Schieben ----------
+  function damage(S, a, n, ev) {
+    if (!alive(S, a)) return;
+    a.hp -= n;
+    ev.tiles.push([a.x, a.y]);
+    if (a.hp <= 0) {
+      if (a.kind === "enemy") { S.enemies.splice(S.enemies.indexOf(a), 1); ev.msgs.push(`${label(a)} zerstört`); }
+      else { a.down = true; a.hp = 0; ev.msgs.push(`${a.name} ist ausgefallen!`); }
+    } else ev.msgs.push(`${label(a)} −${n}`);
+  }
+
+  function breakCrate(S, x, y, ev) {
+    S.tiles[y][x] = "floor";
+    ev.tiles.push([x, y]);
+    ev.msgs.push("Kiste zerstört");
+  }
+
+  function push(S, a, dx, dy, ev) {
+    if (!alive(S, a)) return;
+    const nx = a.x + dx, ny = a.y + dy, t = tile(S, nx, ny);
+    if (t === "wall" || t === "pillar") { ev.msgs.push(`${label(a)} prallt ab`); return damage(S, a, 1, ev); }
+    if (t === "crate") { breakCrate(S, nx, ny, ev); return damage(S, a, 1, ev); }
+    const b = actorAt(S, nx, ny);
+    if (b) { ev.msgs.push(`${label(a)} kracht in ${label(b)}`); damage(S, a, 1, ev); return damage(S, b, 1, ev); }
+    a.x = nx; a.y = ny;
+    ev.tiles.push([nx, ny]);
+    const bl = bulletAt(S, nx, ny);
+    if (bl) {
+      S.bullets.splice(S.bullets.indexOf(bl), 1);
+      ev.msgs.push(`${label(a)} in eine Kugel geschoben`);
+      damage(S, a, 1, ev);
+      if (!alive(S, a)) return;
+    }
+    if (t === "hazard" && !flies(a)) { ev.msgs.push(`${label(a)} im Starkstrom`); damage(S, a, 1, ev); }
+  }
+
+  // ---------- Aktionen der Figuren ----------
+  function shotTarget(S, u, [dx, dy]) {
+    let x = u.x, y = u.y;
+    while (true) {
+      x += dx; y += dy;
+      const t = tile(S, x, y);
+      if (t === "wall") return { kind: "wall", x: x - dx, y: y - dy };
+      if (t === "pillar" || t === "crate") return { kind: t, x, y };
+      const a = actorAt(S, x, y);
+      if (a && a.id !== "bolzen") return { kind: "actor", a, x, y };   // fliegt über Bolzen hinweg
+    }
+  }
+
+  function doShoot(S, id, dir, ev) {
+    const u = unit(S, id), hit = shotTarget(S, u, dir);
+    u.acted = true;
+    if (hit.kind === "crate") breakCrate(S, hit.x, hit.y, ev);
+    else if (hit.kind === "actor") { ev.msgs.push(`Funke trifft ${label(hit.a)}`); damage(S, hit.a, 1, ev); push(S, hit.a, ...dir, ev); }
+    else { ev.tiles.push([hit.x, hit.y]); ev.msgs.push("Daneben"); }
+  }
+
+  function doRam(S, id, dir, ev) {
+    const u = unit(S, id), x = u.x + dir[0], y = u.y + dir[1];
+    u.acted = true;
+    u.facing = [...dir];
+    const t = tile(S, x, y), a = actorAt(S, x, y);
+    ev.tiles.push([x, y]);
+    if (a) { ev.msgs.push(`Bolzen rammt ${label(a)}`); damage(S, a, 1, ev); push(S, a, ...dir, ev); }
+    else if (t === "crate") breakCrate(S, x, y, ev);
+    else ev.msgs.push("Bolzen rammt ins Leere");
+  }
+
+  function doJump(S, id, x, y, ev) {
+    const u = unit(S, id);
+    u.x = x; u.y = y; u.acted = true; u.cd = JUMP_COOLDOWN;
+    ev.tiles.push([x, y]);
+    ev.msgs.push(`${u.name} springt`);
+  }
+
+  // ---------- Kugeln ----------
+  function stepBullet(S, b, ev) {
+    const nx = b.x + b.dx, ny = b.y + b.dy, t = tile(S, nx, ny);
+    const gone = () => S.bullets.splice(S.bullets.indexOf(b), 1);
+    if (t === "wall" || t === "pillar") return gone();
+    if (t === "crate") { gone(); return breakCrate(S, nx, ny, ev); }
+    const a = actorAt(S, nx, ny);
+    if (a) {
+      gone();
+      if (a.id === "bolzen" && a.facing[0] === -b.dx && a.facing[1] === -b.dy) {
+        ev.tiles.push([nx, ny]);
+        ev.msgs.push("Bolzens Schild blockt");
+      } else { ev.msgs.push(`Kugel trifft ${label(a)}`); damage(S, a, 1, ev); }
+      return;
+    }
+    b.x = nx; b.y = ny;
+  }
+
+  // ---------- Gegner ----------
+  function execIntent(S, e, ev) {
+    const it = e.intent;
+    e.intent = null;
+    if (!it) return;
+    if (it.kind === "fire") {
+      const b = { x: e.x, y: e.y, dx: it.dir[0], dy: it.dir[1] };
+      S.bullets.push(b);
+      ev.msgs.push(`${label(e)} feuert`);
+      for (let i = 0; i < BULLET_SPEED && S.bullets.includes(b); i++) stepBullet(S, b, ev);
+    } else if (it.kind === "melee") {
+      const x = e.x + it.dir[0], y = e.y + it.dir[1], a = actorAt(S, x, y);
+      ev.tiles.push([x, y]);
+      if (a) { ev.msgs.push(`${label(e)} schlägt zu`); damage(S, a, 1, ev); }
+      else if (tile(S, x, y) === "crate") breakCrate(S, x, y, ev);
+      else ev.msgs.push(`${label(e)} schlägt ins Leere`);
+    } else if (it.kind === "mortar") {
+      ev.msgs.push(`${label(e)} schlägt ein`);
+      for (const [x, y] of plus(it.x, it.y)) {
+        ev.tiles.push([x, y]);
+        const a = actorAt(S, x, y);
+        if (a) damage(S, a, 1, ev);
+        else if (tile(S, x, y) === "crate") breakCrate(S, x, y, ev);
+      }
+    }
+  }
+
+  // Erreichbare Felder (Breitensuche). Figuren dürfen durcheinander hindurchlaufen.
+  function reach(S, a, max) {
+    const seen = new Map([[key(a.x, a.y), 0]]), q = [[a.x, a.y]];
+    while (q.length) {
+      const [x, y] = q.shift(), d = seen.get(key(x, y));
+      if (d >= max) continue;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx, ny = y + dy, k = key(nx, ny), t = tile(S, nx, ny);
+        if (seen.has(k) || t === "wall" || t === "pillar" || t === "crate") continue;
+        if (t === "hazard" && !flies(a)) continue;
+        if (bulletAt(S, nx, ny)) continue;
+        const o = actorAt(S, nx, ny);
+        if (o && !(a.kind === "unit" && o.kind === "unit")) continue;
+        seen.set(k, d + 1);
+        q.push([nx, ny]);
+      }
+    }
+    const res = new Map();
+    for (const [k, d] of seen) {
+      const [x, y] = k.split(",").map(Number);
+      if (d === 0 || !actorAt(S, x, y)) res.set(k, d);
+    }
+    return res;
+  }
+
+  // Laufweg-Entfernung jedes Feldes zur nächsten Figur
+  function distField(S) {
+    const dist = new Map(), q = [];
+    for (const u of S.units) if (!u.down) { dist.set(key(u.x, u.y), 0); q.push([u.x, u.y]); }
+    while (q.length) {
+      const [x, y] = q.shift(), d = dist.get(key(x, y));
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx, ny = y + dy, k = key(nx, ny), t = tile(S, nx, ny);
+        if (dist.has(k) || t === "wall" || t === "pillar" || t === "crate") continue;
+        dist.set(k, d + 1);
+        q.push([nx, ny]);
+      }
+    }
+    return dist;
+  }
+
+  function lineScan(S, x, y, [dx, dy]) {
+    let d = 0;
+    while (true) {
+      x += dx; y += dy; d++;
+      const t = tile(S, x, y);
+      if (t === "wall" || t === "pillar" || t === "crate") return null;
+      const a = actorAt(S, x, y);
+      if (a) return { a, d };
+    }
+  }
+
+  function moveTo(e, k) { const [x, y] = k.split(",").map(Number); e.x = x; e.y = y; }
+
+  function plan(S, e) {
+    e.intent = null;
+    const units = S.units.filter(u => !u.down);
+    if (!units.length) return;
+    const options = [...reach(S, e, TYPES[e.type].move)];
+    const field = distField(S);
+    const fd = k => field.get(k) ?? 99;
+
+    if (e.type === "krabbler") {
+      let best = Infinity, picks = [];
+      for (const [k, d] of options) {
+        const v = fd(k) * 10 + d;
+        if (v < best) { best = v; picks = [k]; } else if (v === best) picks.push(k);
+      }
+      moveTo(e, pick(picks));
+      const adj = DIRS.filter(([dx, dy]) => { const a = actorAt(S, e.x + dx, e.y + dy); return a && a.kind === "unit"; });
+      if (adj.length) e.intent = { kind: "melee", dir: pick(adj) };
+    }
+
+    if (e.type === "drohne") {
+      let best = -Infinity, picks = [];
+      for (const [k] of options) {
+        const [x, y] = k.split(",").map(Number);
+        const near = units.some(u => manhattan(u, { x, y }) <= 1) ? -3 : 0;
+        for (const dir of DIRS) {
+          const hit = lineScan(S, x, y, dir);
+          let score = -10;
+          if (hit && hit.a.kind === "unit") {
+            score = 10 - hit.d * 0.4;
+            if (hit.a.id === "bolzen" && hit.a.facing[0] === -dir[0] && hit.a.facing[1] === -dir[1]) score = 2;
+          } else if (hit && hit.a.kind === "enemy" && hit.a !== e) score = -6;
+          score += near;
+          if (score > best) { best = score; picks = [[k, dir]]; } else if (score === best) picks.push([k, dir]);
+        }
+      }
+      if (best > 0) {
+        const [k, dir] = pick(picks);
+        moveTo(e, k);
+        e.intent = { kind: "fire", dir };
+      } else {
+        let bd = Infinity, ks = [];
+        for (const [k] of options) { const v = fd(k); if (v < bd) { bd = v; ks = [k]; } else if (v === bd) ks.push(k); }
+        moveTo(e, pick(ks));
+      }
+    }
+
+    if (e.type === "moerser") {
+      let best = -Infinity, picks = [];
+      for (const [k] of options) {
+        const [x, y] = k.split(",").map(Number);
+        const m = Math.min(...units.map(u => manhattan(u, { x, y })));
+        const v = Math.min(m, 4);
+        if (v > best) { best = v; picks = [k]; } else if (v === best) picks.push(k);
+      }
+      moveTo(e, pick(picks));
+      const low = Math.min(...units.map(u => u.hp));
+      const target = pick(units.filter(u => u.hp === low));
+      e.intent = { kind: "mortar", x: target.x, y: target.y };
+    }
+  }
+
+  // Felder, die im nächsten Gegnerzug getroffen werden
+  function danger(S) {
+    const set = new Set();
+    const path = (x, y, dx, dy) => {
+      for (let i = 0; i < BULLET_SPEED; i++) {
+        x += dx; y += dy;
+        const t = tile(S, x, y);
+        if (t === "wall" || t === "pillar") return;
+        set.add(key(x, y));
+        if (t === "crate" || actorAt(S, x, y)) return;
+      }
+    };
+    for (const b of S.bullets) path(b.x, b.y, b.dx, b.dy);
+    for (const e of S.enemies) {
+      const it = e.intent;
+      if (!it) continue;
+      if (it.kind === "fire") path(e.x, e.y, ...it.dir);
+      if (it.kind === "melee") set.add(key(e.x + it.dir[0], e.y + it.dir[1]));
+      if (it.kind === "mortar") plus(it.x, it.y).forEach(([x, y]) => set.add(key(x, y)));
+    }
+    return set;
+  }
+
+  function checkOver(S) {
+    if (!S.enemies.length) S.over = "win";
+    else if (S.units.every(u => u.down)) S.over = "lose";
+    return S.over;
+  }
+
+  // ---------- Oberfläche ----------
+  let sel = "funke", mode = null, pending = null, preview = null, busy = false;
+  let undo = {}, flashes = [];
+
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ S, undo })); } catch (e) {} }
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+      if (d && d.S && d.S.tiles && !d.S.over) { undo = d.undo || {}; return d.S; }
+    } catch (e) {}
+    return null;
+  }
+
+  function log(text) { $("log").textContent = text; }
+  function summary(ev, max = 4) {
+    const m = ev.msgs;
+    return m.length > max ? m.slice(-max).join(" · ") : m.join(" · ");
+  }
+
+  function selected() { return S.units.find(u => u.id === sel && !u.down) || null; }
+  function canMove(u) { return u && !u.moved && !u.acted; }
+
+  function validTargets(u) {
+    const set = new Map();
+    if (!u || u.acted) return set;
+    if (mode === "shoot") {
+      for (const dir of DIRS) {
+        let x = u.x, y = u.y;
+        while (inb(x + dir[0], y + dir[1])) { x += dir[0]; y += dir[1]; set.set(key(x, y), dir); }
+      }
+    }
+    if (mode === "ram") for (const dir of DIRS) if (inb(u.x + dir[0], u.y + dir[1])) set.set(key(u.x + dir[0], u.y + dir[1]), dir);
+    if (mode === "jump") {
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const d = Math.abs(x - u.x) + Math.abs(y - u.y);
+        if (d < 1 || d > 2) continue;
+        if (tile(S, x, y) !== "floor" || actorAt(S, x, y) || bulletAt(S, x, y)) continue;
+        set.set(key(x, y), [x, y]);
+      }
+    }
+    return set;
+  }
+
+  function runAction(state, k, target) {
+    const ev = { msgs: [], tiles: [] };
+    if (mode === "shoot") doShoot(state, sel, target, ev);
+    if (mode === "ram") doRam(state, sel, target, ev);
+    if (mode === "jump") doJump(state, sel, target[0], target[1], ev);
+    return ev;
+  }
+
+  function onBoardTap(x, y) {
+    if (busy || !S || S.over) return;
+    const k = key(x, y), u = selected();
+    if (mode) {
+      const targets = validTargets(u);
+      if (!targets.has(k)) { mode = null; pending = null; preview = null; log(""); return render(); }
+      const target = targets.get(k);
+      // Beim Schießen zählt nur die Richtung
+      const pkey = mode === "shoot" ? `dir:${target}` : k;
+      if (pending === pkey) {
+        const ev = runAction(S, k, target);
+        delete undo[sel];
+        mode = null; pending = null; preview = null;
+        afterPlayerAction(ev);
+        return;
+      }
+      pending = pkey;
+      const copy = clone(S);
+      const ev = runAction(copy, k, target);
+      preview = { state: copy, ev };
+      log(`Vorschau: ${summary(ev) || "keine Wirkung"}. Nochmal tippen zum Ausführen.`);
+      return render();
+    }
+    const a = actorAt(S, x, y);
+    if (a && a.kind === "unit") { select(a.id); return; }
+    if (a && a.kind === "enemy") {
+      log(`${TYPES[a.type].name} (${a.hp}/${a.max}): ${TYPES[a.type].info}`);
+      return render();
+    }
+    if (canMove(u)) {
+      const r = reach(S, u, MOVE);
+      if (r.has(k) && r.get(k) > 0) {
+        undo[u.id] = { x: u.x, y: u.y, facing: [...u.facing] };
+        const dx = x - u.x, dy = y - u.y;
+        if (u.id === "bolzen") u.facing = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+        u.x = x; u.y = y; u.moved = true;
+        log(`${u.name} ist gelaufen. Jetzt eine Aktion wählen oder „Zurück“.`);
+        save();
+        return render();
+      }
+    }
+    log("");
+    render();
+  }
+
+  function afterPlayerAction(ev) {
+    flash(ev.tiles);
+    log(summary(ev));
+    if (checkOver(S)) return finish();
+    // Zur anderen Figur wechseln, wenn diese noch handeln kann
+    const other = S.units.find(u => u.id !== sel && !u.down && !u.acted);
+    if (other) sel = other.id;
+    save();
+    render();
+  }
+
+  function select(id) {
+    if (busy) return;
+    sel = id; mode = null; pending = null; preview = null;
+    const u = selected();
+    if (u) log(u.acted ? `${u.name} ist für diese Runde fertig.` : u.id === "funke"
+      ? "Funke: bis zu 3 Felder laufen, dann schießen oder springen."
+      : "Bolzen: laufen, dann rammen oder springen. Das Schild blockt Kugeln von vorn.");
+    render();
+  }
+
+  function setMode(m) {
+    const u = selected();
+    if (busy || !u || u.acted) return;
+    if (m === "jump" && u.cd > 0) return;
+    mode = mode === m ? null : m;
+    pending = null; preview = null;
+    if (mode === "shoot") log("Tippe in eine Richtung. Erst Vorschau, dann nochmal tippen.");
+    if (mode === "ram") log("Tippe ein Nachbarfeld zum Rammen.");
+    if (mode === "jump") log("Tippe ein Feld bis 2 Schritte entfernt. Auch durch Kugeln.");
+    if (!mode) log("");
+    render();
+  }
+
+  async function endTurn() {
+    if (busy || !S || S.over) return;
+    busy = true; mode = null; pending = null; preview = null;
+    undo = {};
+    render();
+    const all = { msgs: [], tiles: [] };
+    const step = async (fn) => {
+      const ev = { msgs: [], tiles: [] };
+      fn(ev);
+      all.msgs.push(...ev.msgs);
+      flash(ev.tiles);
+      if (ev.msgs.length) log(summary(ev, 3));
+      render();
+      await sleep(ev.msgs.length || ev.tiles.length ? 420 : 200);
+    };
+    log("Gegnerzug …");
+    for (let i = 0; i < BULLET_SPEED && S.bullets.length; i++) {
+      await step(ev => { for (const b of [...S.bullets]) if (S.bullets.includes(b)) stepBullet(S, b, ev); });
+      if (checkOver(S)) break;
+    }
+    if (!S.over) {
+      for (const e of [...S.enemies]) {
+        if (!S.enemies.includes(e) || !e.intent) continue;
+        await step(ev => execIntent(S, e, ev));
+        if (checkOver(S)) break;
+      }
+    }
+    if (S.over) { busy = false; return finish(); }
+    for (const e of S.enemies) plan(S, e);
+    S.round++;
+    for (const u of S.units) { u.moved = false; u.acted = false; if (u.cd > 0) u.cd--; }
+    if (selected() === null) sel = S.units.find(u => !u.down).id;
+    busy = false;
+    save();
+    log(all.msgs.length ? `${summary(all, 3)}. Dein Zug.` : "Dein Zug.");
+    render();
+  }
+
+  function finish() {
+    save();
+    render();
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    if (S.over === "win") {
+      const hp = S.units.filter(u => !u.down).map(u => `${u.name} ${u.hp}/${u.max}`).join(", ");
+      overlay("Raum gesäubert", `In ${S.round} ${S.round === 1 ? "Runde" : "Runden"}. Übrig: ${hp}.`, "Nächster Raum", startRoom);
+    } else {
+      overlay("Systemausfall", `Beide Roboter sind ausgefallen, in Runde ${S.round}.`, "Nochmal", startRoom);
+    }
+  }
+
+  function startRoom() {
+    S = newRoom();
+    sel = "funke"; mode = null; pending = null; preview = null; undo = {};
+    log("Neuer Raum. Schraffierte Felder werden im Gegnerzug getroffen.");
+    save();
+    render();
+  }
+
+  function overlay(title, text, btn, onClick, legend) {
+    $("ov-title").textContent = title;
+    $("ov-text").textContent = text;
+    $("ov-btn").textContent = btn;
+    $("legend").hidden = !legend;
+    $("overlay").hidden = false;
+    $("ov-btn").onclick = () => { $("overlay").hidden = true; onClick?.(); };
+  }
+
+  function showHelp() {
+    const items = [
+      ["funke", "Funke schießt in gerader Linie, auch über Bolzen hinweg. Treffer: −1 und 1 Feld wegschieben."],
+      ["bolzen", "Bolzen rammt ein Nachbarfeld (−1, wegschieben). Sein Schild (Balken) blockt Kugeln von vorn. Drehen ist kostenlos."],
+      ["hazard", "Wer gegen Säulen, Kisten, Wände oder andere geschoben wird, nimmt Schaden. Starkstrom und Kugeln auch."],
+      ["drohne", "Drohne: schießt Kugeln. Sie fliegen 2 Felder pro Runde."],
+      ["krabbler", "Krabbler: schlägt aufs Nachbarfeld, in das er zeigt."],
+      ["moerser", "Mörser: trifft das markierte Kreuz, auch seine eigenen Leute."],
+    ];
+    const box = $("legend");
+    box.innerHTML = "";
+    for (const [name, text] of items) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 60;
+      sprite(c.getContext("2d"), name, 0, 0, 60, css("--pixel"));
+      const span = document.createElement("span");
+      span.textContent = text;
+      box.append(c, span);
+    }
+    overlay("Doppel-Bit",
+      "Jede Figur läuft bis zu 3 Felder und macht eine Aktion. Schraffierte Felder werden im Gegnerzug getroffen. Ziel antippen zeigt eine Vorschau, nochmal tippen führt aus.",
+      "Los geht's", null, true);
+    try { localStorage.setItem(HELP_KEY, "1"); } catch (e) {}
+  }
+
+  // ---------- Zeichnen ----------
+  let hatch = null;
+  function makeHatch(s, color) {
+    const c = document.createElement("canvas"), n = Math.max(6, Math.round(s / 5));
+    c.width = c.height = n;
+    const g = c.getContext("2d");
+    g.strokeStyle = color;
+    g.lineWidth = Math.max(1.5, n / 4);
+    g.beginPath(); g.moveTo(0, n); g.lineTo(n, 0); g.moveTo(-n / 2, n / 2); g.lineTo(n / 2, -n / 2); g.moveTo(n / 2, n * 1.5); g.lineTo(n * 1.5, n / 2); g.stroke();
+    return ctx.createPattern(c, "repeat");
+  }
+
+  function flash(tiles) {
+    const until = performance.now() + 260;
+    for (const [x, y] of tiles) flashes.push({ x, y, until });
+    setTimeout(render, 280);
+  }
+
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    hatch = null;
+    render();
+  }
+
+  function arrow(cx, cy, [dx, dy], size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * size, cy + dy * size);
+    ctx.lineTo(cx - dy * size * 0.6 + dx * size * 0.2, cy + dx * size * 0.6 + dy * size * 0.2);
+    ctx.lineTo(cx + dy * size * 0.6 + dx * size * 0.2, cy - dx * size * 0.6 + dy * size * 0.2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function pips(a, px, py, s, color) {
+    const n = a.max, w = Math.max(3, Math.round(s / 11)), gap = Math.max(1, Math.round(w / 2));
+    const total = n * w + (n - 1) * gap, x0 = Math.round(px + (s - total) / 2), y0 = Math.round(py + s - w - 1);
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = color;
+      if (i < a.hp) ctx.fillRect(x0 + i * (w + gap), y0, w, w);
+      else ctx.strokeRect(x0 + i * (w + gap) + 0.5, y0 + 0.5, w - 1, w - 1);
+    }
+  }
+
+  function render() {
+    if (!S) return;
+    const view = preview ? preview.state : S;
+    const s = cv.width / N, now = performance.now();
+    const c = { lcd: css("--lcd"), pixel: css("--pixel"), ghost: css("--ghost"), soft: css("--soft"), hl: css("--hl") };
+    if (!hatch) hatch = makeHatch(s, c.soft);
+
+    ctx.fillStyle = c.lcd;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = c.ghost;
+    for (let i = 1; i < N; i++) {
+      ctx.fillRect(Math.round(i * s), 0, Math.max(1, s / 30), cv.height);
+      ctx.fillRect(0, Math.round(i * s), cv.width, Math.max(1, s / 30));
+    }
+
+    const u = selected();
+    // Laufweite
+    if (!preview && !mode && !busy && canMove(u)) {
+      ctx.fillStyle = c.hl;
+      for (const [k, d] of reach(S, u, MOVE)) {
+        if (!d) continue;
+        const [x, y] = k.split(",").map(Number);
+        ctx.fillRect(x * s + s * 0.08, y * s + s * 0.08, s * 0.84, s * 0.84);
+      }
+    }
+    // Mögliche Ziele der Aktion
+    if (mode && u) {
+      ctx.strokeStyle = c.soft;
+      ctx.lineWidth = Math.max(2, s / 18);
+      for (const k of validTargets(u).keys()) {
+        const [x, y] = k.split(",").map(Number);
+        const m = s * 0.18;
+        ctx.strokeRect(x * s + m, y * s + m, s - 2 * m, s - 2 * m);
+      }
+    }
+
+    // Gefahrenfelder
+    const dz = danger(view);
+    ctx.fillStyle = hatch;
+    for (const k of dz) {
+      const [x, y] = k.split(",").map(Number);
+      ctx.fillRect(x * s, y * s, Math.ceil(s), Math.ceil(s));
+    }
+
+    // Gelände
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const t = view.tiles[y][x];
+      if (t === "pillar" || t === "crate") sprite(ctx, t, x * s, y * s, s, c.pixel);
+      if (t === "hazard") sprite(ctx, "hazard", x * s, y * s, s, c.soft);
+    }
+
+    // Kugeln
+    for (const b of view.bullets) {
+      const cx = b.x * s + s / 2, cy = b.y * s + s / 2, r = s * 0.14;
+      ctx.fillStyle = c.pixel;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.fillRect(cx - b.dx * s * 0.3 - r * 0.5, cy - b.dy * s * 0.3 - r * 0.5, r, r);
+      arrow(cx + b.dx * s * 0.28, cy + b.dy * s * 0.28, [b.dx, b.dy], s * 0.12, c.pixel);
+    }
+
+    // Gegner mit Absicht
+    for (const e of view.enemies) {
+      const px = e.x * s, py = e.y * s;
+      sprite(ctx, e.type, px, py - s * 0.05, s, c.pixel);
+      pips(e, px, py, s, c.pixel);
+      const it = e.intent;
+      if (it && (it.kind === "fire" || it.kind === "melee")) arrow(px + s / 2 + it.dir[0] * s * 0.42, py + s / 2 + it.dir[1] * s * 0.42, it.dir, s * 0.13, c.pixel);
+      if (it && it.kind === "mortar") {
+        const cx = it.x * s + s / 2, cy = it.y * s + s / 2;
+        ctx.strokeStyle = c.pixel;
+        ctx.lineWidth = Math.max(2, s / 16);
+        ctx.strokeRect(cx - s * 0.32, cy - s * 0.32, s * 0.64, s * 0.64);
+        ctx.fillStyle = c.pixel;
+        ctx.fillRect(cx - s * 0.05, cy - s * 0.05, s * 0.1, s * 0.1);
+      }
+    }
+
+    // Figuren
+    for (const a of view.units) {
+      if (a.down) continue;
+      const px = a.x * s, py = a.y * s;
+      const done = a.acted && !preview;
+      sprite(ctx, a.id, px, py - s * 0.05, s, done ? c.soft : c.pixel);
+      pips(a, px, py, s, c.pixel);
+      if (a.id === "bolzen") {
+        // Schild als Balken an der Vorderseite
+        const [fx, fy] = a.facing, th = s * 0.1, len = s * 0.8;
+        ctx.fillStyle = c.pixel;
+        if (fx) ctx.fillRect(px + (fx > 0 ? s - th : 0), py + (s - len) / 2, th, len);
+        else ctx.fillRect(px + (s - len) / 2, py + (fy > 0 ? s - th : 0), len, th);
+      }
+      if (a.cd > 0) {
+        ctx.fillStyle = c.pixel;
+        ctx.font = `${Math.round(s * 0.2)}px Silkscreen, monospace`;
+        ctx.fillText(String(a.cd), px + s * 0.06, py + s * 0.24);
+      }
+      if (a.id === sel && !busy) {
+        ctx.strokeStyle = c.pixel;
+        ctx.lineWidth = Math.max(2, s / 16);
+        const m = ctx.lineWidth / 2 + 1, l = s * 0.25;
+        for (const [ox, oy, dx, dy] of [[0, 0, 1, 1], [s, 0, -1, 1], [0, s, 1, -1], [s, s, -1, -1]]) {
+          ctx.beginPath();
+          ctx.moveTo(px + ox + dx * m, py + oy + dy * (m + l));
+          ctx.lineTo(px + ox + dx * m, py + oy + dy * m);
+          ctx.lineTo(px + ox + dx * (m + l), py + oy + dy * m);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Vorschau: betroffene Felder umrahmen
+    if (preview) {
+      ctx.strokeStyle = c.pixel;
+      ctx.lineWidth = Math.max(3, s / 12);
+      for (const [x, y] of preview.ev.tiles) if (inb(x, y)) ctx.strokeRect(x * s + 2, y * s + 2, s - 4, s - 4);
+      // Dicker Rahmen ums Feld: das ist nur eine Vorschau
+      const bw = Math.max(4, s / 9);
+      ctx.lineWidth = bw;
+      ctx.strokeRect(bw / 2, bw / 2, cv.width - bw, cv.height - bw);
+    }
+
+    // Treffer-Blitz
+    flashes = flashes.filter(f => f.until > now);
+    ctx.fillStyle = c.pixel;
+    for (const f of flashes) ctx.fillRect(f.x * s, f.y * s, Math.ceil(s), Math.ceil(s));
+
+    renderPanel();
+  }
+
+  function renderPanel() {
+    $("round").textContent = S.round;
+    $("left").textContent = S.enemies.length;
+    for (const a of S.units) {
+      const chip = $(`chip-${a.id}`);
+      chip.setAttribute("aria-pressed", String(a.id === sel && !a.down));
+      chip.disabled = a.down || busy;
+      const state = a.down ? "ausgefallen" : a.acted ? "fertig" : a.moved ? "gelaufen" : "bereit";
+      chip.innerHTML = "";
+      chip.append(`${a.name} ${"♥".repeat(a.hp)}${"♡".repeat(a.max - a.hp)}`);
+      const small = document.createElement("small");
+      small.textContent = state;
+      chip.append(small);
+    }
+    const u = selected(), off = busy || !u || u.acted;
+    const main = $("a-main");
+    main.textContent = u?.id === "bolzen" ? "Rammen" : "Schießen";
+    const mainMode = u?.id === "bolzen" ? "ram" : "shoot";
+    main.disabled = off;
+    main.setAttribute("aria-pressed", String(mode === mainMode));
+    $("a-jump").textContent = u && u.cd > 0 ? `Sprung (${u.cd})` : "Sprung";
+    $("a-jump").disabled = off || u.cd > 0;
+    $("a-jump").setAttribute("aria-pressed", String(mode === "jump"));
+    $("a-turn").hidden = u?.id !== "bolzen";
+    $("a-turn").disabled = busy || !u;
+    $("a-undo").disabled = busy || !u || !u.moved || u.acted || !undo[u.id];
+    $("end").disabled = busy;
+    $("end").textContent = busy ? "Gegnerzug …" : "Zug beenden";
+  }
+
+  // ---------- Eingaben ----------
+  cv.addEventListener("click", e => {
+    const r = cv.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * N), y = Math.floor((e.clientY - r.top) / r.height * N);
+    if (inb(x, y)) onBoardTap(x, y);
+  });
+  $("chip-funke").addEventListener("click", () => select("funke"));
+  $("chip-bolzen").addEventListener("click", () => select("bolzen"));
+  $("a-main").addEventListener("click", () => setMode(selected()?.id === "bolzen" ? "ram" : "shoot"));
+  $("a-jump").addEventListener("click", () => setMode("jump"));
+  $("a-turn").addEventListener("click", () => {
+    const u = selected();
+    if (busy || !u || u.id !== "bolzen") return;
+    const i = DIRS.findIndex(d => d[0] === u.facing[0] && d[1] === u.facing[1]);
+    u.facing = [...DIRS[(i + 1) % 4]];
+    if (preview) { preview = null; pending = null; }
+    log("Schild gedreht. Es blockt Kugeln, die von vorn kommen.");
+    save();
+    render();
+  });
+  $("a-undo").addEventListener("click", () => {
+    const u = selected();
+    if (busy || !u || !undo[u.id] || u.acted) return;
+    Object.assign(u, { x: undo[u.id].x, y: undo[u.id].y, facing: undo[u.id].facing, moved: false });
+    delete undo[u.id];
+    mode = null; pending = null; preview = null;
+    log(`${u.name} ist zurück.`);
+    save();
+    render();
+  });
+  $("end").addEventListener("click", endTurn);
+  $("help").addEventListener("click", () => { if (!busy) showHelp(); });
+
+  let confirmTimer = null;
+  $("restart").addEventListener("click", () => {
+    if (busy) return;
+    if (!confirmTimer) {
+      $("restart").textContent = "Nochmal tippen";
+      confirmTimer = setTimeout(() => { $("restart").textContent = "Neuer Raum"; confirmTimer = null; }, 2500);
+      return;
+    }
+    clearTimeout(confirmTimer); confirmTimer = null;
+    $("restart").textContent = "Neuer Raum";
+    startRoom();
+  });
+
+  window.addEventListener("resize", resize);
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+
+  S = load();
+  if (S) { log(`Runde ${S.round}. Dein Zug.`); }
+  else startRoom();
+  resize();
+  let seen = false;
+  try { seen = localStorage.getItem(HELP_KEY) === "1"; } catch (e) {}
+  if (!seen) showHelp();
+
+  // Für Tests: Zugriff auf den Zustand
+  window.__doppelbit = { get S() { return S; } };
+})();
+</script>
+</body>
+</html>
