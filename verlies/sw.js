@@ -1,5 +1,5 @@
 // Offline-Unterstützung: erst Netzwerk (damit Updates sofort ankommen), sonst Cache
-const CACHE = "pixel-labyrinth-v1";
+const CACHE = "pixel-verlies-v1";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icons/icon-180.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
